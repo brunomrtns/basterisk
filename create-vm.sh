@@ -25,6 +25,7 @@ PORTS=(
     "5001:5001/tcp"
     "5005:5005/tcp"
     "5432:5432/tcp"
+    "8088:8088/tcp"   # ARI (Asterisk REST Interface)
     "8161:8161/tcp"
     "8787:8787/tcp"
     "4020:4099/tcp"
