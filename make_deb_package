@@ -229,6 +229,13 @@ chown -R asterisk.asterisk /var/{lib,log,spool}/asterisk
 mkdir -p /usr/lib/asterisk
 chown -R asterisk.asterisk /usr/lib/asterisk
 chmod -R 750 /var/{lib,log,run,spool}/asterisk /usr/lib/asterisk /etc/asterisk
+
+# Habilitar e iniciar Asterisk
+systemctl enable asterisk
+systemctl start asterisk
+
+echo \"Asterisk instalado e configurado com sucesso!\"
+
 ldconfig
 " >~/debbuild/BUILDROOT/DEBIAN/postinst
 chmod +x ~/debbuild/BUILDROOT/DEBIAN/postinst
