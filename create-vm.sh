@@ -48,32 +48,26 @@ fi
 # Criando network forward se não existir
 echo "Verificando network forward para ${HOST_IP}..."
 
+# Criando network forward (sempre limpo)
+echo "Verificando network forward para ${HOST_IP}..."
+
 if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
-    echo "✅ Network forward ${HOST_IP} já existe."
-    echo "🧹 Limpando regras antigas (VM será recriada com novo IP)..."
-    
-    # Limpar todas as portas do forward existente
-    echo "  Removendo todas as regras de port forwarding antigas..."
-    incus network forward show incusbr0 "${HOST_IP}" --format yaml 2>/dev/null | \
-    grep -A1 -E "listen_port:" | \
-    grep -E "(listen_port|protocol):" | \
-    awk '/protocol:/ {prot=$2} /listen_port:/ {print prot " " $2}' | \
-    while read protocol port; do
-        if [ -n "$protocol" ] && [ -n "$port" ]; then
-            echo "    Removendo porta $port/$protocol"
-            incus network forward port remove incusbr0 "${HOST_IP}" "$protocol" "$port" 2>/dev/null || true
-        fi
-    done
-    echo "  ✅ Regras antigas removidas"
-else
-    echo "🔄 Criando network forward para ${HOST_IP}..."
-    if incus network forward create incusbr0 "${HOST_IP}"; then
-        echo "✅ Network forward criado com sucesso!"
+    echo "🗑️  Removendo forward existente ${HOST_IP} (VM será recriada com novo IP)..."
+    if incus network forward delete incusbr0 "${HOST_IP}"; then
+        echo "  ✅ Forward antigo removido"
     else
-        echo "❌ Erro ao criar network forward. Tentando listar forwards existentes:"
-        incus network forward list incusbr0 || echo "Falha ao listar forwards"
+        echo "  ❌ Erro ao remover forward antigo"
         exit 1
     fi
+fi
+
+echo "🔄 Criando network forward limpo para ${HOST_IP}..."
+if incus network forward create incusbr0 "${HOST_IP}"; then
+    echo "✅ Network forward criado com sucesso!"
+else
+    echo "❌ Erro ao criar network forward. Tentando listar forwards existentes:"
+    incus network forward list incusbr0 || echo "Falha ao listar forwards"
+    exit 1
 fi
 
 echo "Criando VM ${VM_NAME}..."
@@ -115,10 +109,10 @@ for port_pair in "${PORTS[@]}"; do
 
     echo "  Porta ${LISTEN_PORT}/${PROTOCOL} → ${VM_IP}:${TARGET_PORT}"
     
-    if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT} 2>/dev/null; then
+    if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}; then
         echo "    ✅ Configurada"
     else
-        echo "    ⚠️  Erro ao configurar porta $LISTEN_PORT/$PROTOCOL"
+        echo "    ❌ Erro ao configurar porta $LISTEN_PORT/$PROTOCOL"
     fi
 done
 
