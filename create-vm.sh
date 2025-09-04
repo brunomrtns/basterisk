@@ -38,13 +38,20 @@ PORTS=(
 check_port_and_protocol() {
     local port=$1
     local protocol=$2
-    local forwards=$(incus network forward list incusbr0 -f yaml 2>/dev/null || echo "")
+    
+    # Verificar se o forward existe primeiro
+    if ! incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
+        return 1  # Forward não existe, porta não existe
+    fi
+    
+    # Verificar se a porta existe no forward
+    local forwards=$(incus network forward show incusbr0 "${HOST_IP}" -f yaml 2>/dev/null || echo "")
     echo "$forwards" | awk -v port="$port" -v protocol="$protocol" '
-    /protocol:/ { 
-        curr_protocol = $2 
+    /- protocol:/ { 
+        curr_protocol = $3 
     }
     /listen_port:/ {
-        if (curr_protocol == protocol && $2 == "\"" port "\"") {
+        if (curr_protocol == protocol && $2 == port) {
             found = 1
         }
     }
@@ -69,12 +76,18 @@ else
 fi
 
 # Criando network forward se não existir
-FORWARDS=$(incus network forward list incusbr0 -f yaml 2>/dev/null || echo "")
-if echo "$FORWARDS" | grep -q "listen_address: $HOST_IP"; then
-    echo "Network forward incusbr0 já existe."
+echo "Verificando network forward para ${HOST_IP}..."
+if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
+    echo "Network forward ${HOST_IP} já existe."
 else
-    echo "Criando network forward..."
-    incus network forward create incusbr0 "${HOST_IP}" || echo "Erro ao criar network forward"
+    echo "Criando network forward para ${HOST_IP}..."
+    if incus network forward create incusbr0 "${HOST_IP}"; then
+        echo "✅ Network forward criado com sucesso!"
+    else
+        echo "❌ Erro ao criar network forward. Tentando listar forwards existentes:"
+        incus network forward list incusbr0 || echo "Falha ao listar forwards"
+        exit 1
+    fi
 fi
 
 echo "Criando VM ${VM_NAME}..."
@@ -96,8 +109,15 @@ fi
 
 echo "Configurando port forwarding com network forward..."
 
-# Atualizar lista de forwards
-FORWARDS=$(incus network forward list incusbr0 -f yaml)
+# Verificar se o forward foi criado corretamente
+if ! incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
+    echo "❌ Erro: Network forward ${HOST_IP} não encontrado!"
+    echo "Forwards disponíveis:"
+    incus network forward list incusbr0 || echo "Nenhum forward encontrado"
+    exit 1
+fi
+
+echo "✅ Network forward ${HOST_IP} confirmado"
 
 # Configurar portas básicas (SIP)
 for port_pair in "${PORTS[@]}"; do
@@ -110,24 +130,36 @@ for port_pair in "${PORTS[@]}"; do
     
     if check_port_and_protocol $LISTEN_PORT $PROTOCOL; then
         echo "  Removendo regra existente..."
-        incus network forward port remove incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT}
+        incus network forward port remove incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} 2>/dev/null || echo "  ⚠️  Falha ao remover regra existente"
     fi
     
     echo "  Adicionando nova regra..."
-    incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT} || echo "  ⚠️  Erro ao adicionar regra para porta $LISTEN_PORT/$PROTOCOL"
+    if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}; then
+        echo "  ✅ Regra adicionada com sucesso"
+    else
+        echo "  ⚠️  Erro ao adicionar regra para porta $LISTEN_PORT/$PROTOCOL"
+    fi
 done
 
 # Configurar portas RTP (UDP)
 echo "Configurando portas RTP ${HOST_RTP_START_PORT}-${HOST_RTP_END_PORT} → ${VM_IP}:10000-10079"
+RTP_SUCCESS=0
+RTP_TOTAL=0
+
 for HOST_PORT in $(seq ${HOST_RTP_START_PORT} ${HOST_RTP_END_PORT}); do
     VM_PORT=$((10000 + HOST_PORT - HOST_RTP_START_PORT))
+    RTP_TOTAL=$((RTP_TOTAL + 1))
     
     if check_port_and_protocol $HOST_PORT "udp"; then
         incus network forward port remove incusbr0 ${HOST_IP} udp ${HOST_PORT} 2>/dev/null || true
     fi
     
-    incus network forward port add incusbr0 ${HOST_IP} udp ${HOST_PORT} ${VM_IP} ${VM_PORT} 2>/dev/null || echo "  ⚠️  Erro ao adicionar regra RTP para porta $HOST_PORT/udp"
+    if incus network forward port add incusbr0 ${HOST_IP} udp ${HOST_PORT} ${VM_IP} ${VM_PORT} 2>/dev/null; then
+        RTP_SUCCESS=$((RTP_SUCCESS + 1))
+    fi
 done
+
+echo "✅ Portas RTP configuradas: ${RTP_SUCCESS}/${RTP_TOTAL} sucessos"
 
 echo "✅ Port forwarding configurado!"
 
