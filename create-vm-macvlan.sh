@@ -10,9 +10,11 @@ PARENT_PATH=$(
 source "${PARENT_PATH}/utils/wait_system_ready"
 
 VM_NAME="asterisk"
+
 JASTERISK_TAR_URL="https://github.com/brunomrtns/basterisk/releases/download/1.0.0/jasterisk.tar"
 JASTERISK_FALLBACK="/home/bruno/Downloads/jasterisk.tar"
 JASTERISK_TAR_LOCAL="${PARENT_PATH}/jasterisk.tar"
+
 HOST_UDP_PORT="5060"
 HOST_RTP_START_PORT="4020"
 HOST_RTP_END_PORT="4099"
