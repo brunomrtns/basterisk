@@ -113,10 +113,10 @@ done
 
 echo "✅ Port forwarding configurado!"
 
-# Baixar basterisk
-if ! download_basterisk "${JASTERISK_TAR_URL}" "${JASTERISK_TAR_LOCAL}" "${JASTERISK_FALLBACK}"; then
-    exit 1
-fi
+# # Baixar basterisk
+# if ! download_basterisk "${JASTERISK_TAR_URL}" "${JASTERISK_TAR_LOCAL}" "${JASTERISK_FALLBACK}"; then
+#     exit 1
+# fi
 
 # Instalar dependências básicas
 install_vm_basics "${VM_NAME}"

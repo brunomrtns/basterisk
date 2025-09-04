@@ -12,71 +12,71 @@ validate_file() {
     return 1
 }
 
-# Função para baixar basterisk.tar
-download_basterisk() {
-    local url="$1"
-    local local_path="$2"
-    local fallback_path="$3"
+# # Função para baixar basterisk.tar
+# download_basterisk() {
+#     local url="$1"
+#     local local_path="$2"
+#     local fallback_path="$3"
     
-    echo "📥 Verificando basterisk.tar..."
+#     echo "📥 Verificando basterisk.tar..."
     
-    # Verificar se arquivo local existe e é válido
-    if validate_file "${local_path}"; then
-        echo "✅ basterisk.tar válido encontrado: ${local_path}"
-        return 0
-    fi
+#     # Verificar se arquivo local existe e é válido
+#     if validate_file "${local_path}"; then
+#         echo "✅ basterisk.tar válido encontrado: ${local_path}"
+#         return 0
+#     fi
     
-    echo "🔄 Arquivo não encontrado ou inválido, obtendo novo..."
-    rm -f "${local_path}"
+#     echo "🔄 Arquivo não encontrado ou inválido, obtendo novo..."
+#     rm -f "${local_path}"
     
-    echo "📥 Tentando download do GitHub..."
+#     echo "📥 Tentando download do GitHub..."
     
-    if command -v wget >/dev/null 2>&1; then
-        echo "🔄 Baixando via wget..."
-        if wget --progress=bar:force --timeout=60 --tries=3 -O "${local_path}" "${url}"; then
-            echo "✅ Download via wget concluído!"
-        else
-            echo "❌ Falha no download via wget"
-            rm -f "${local_path}"
-        fi
-    elif command -v curl >/dev/null 2>&1; then
-        echo "🔄 Baixando via curl..."
-        if curl --progress-bar --connect-timeout 60 --retry 3 -L -o "${local_path}" "${url}"; then
-            echo "✅ Download via curl concluído!"
-        else
-            echo "❌ Falha no download via curl"
-            rm -f "${local_path}"
-        fi
-    else
-        echo "❌ wget ou curl não encontrado!"
-        echo "💡 Instale: sudo apt install wget curl"
-        return 1
-    fi
+#     if command -v wget >/dev/null 2>&1; then
+#         echo "🔄 Baixando via wget..."
+#         if wget --progress=bar:force --timeout=60 --tries=3 -O "${local_path}" "${url}"; then
+#             echo "✅ Download via wget concluído!"
+#         else
+#             echo "❌ Falha no download via wget"
+#             rm -f "${local_path}"
+#         fi
+#     elif command -v curl >/dev/null 2>&1; then
+#         echo "🔄 Baixando via curl..."
+#         if curl --progress-bar --connect-timeout 60 --retry 3 -L -o "${local_path}" "${url}"; then
+#             echo "✅ Download via curl concluído!"
+#         else
+#             echo "❌ Falha no download via curl"
+#             rm -f "${local_path}"
+#         fi
+#     else
+#         echo "❌ wget ou curl não encontrado!"
+#         echo "💡 Instale: sudo apt install wget curl"
+#         return 1
+#     fi
     
-    # Se download falhou, tentar fallback
-    if ! validate_file "${local_path}"; then
-        echo "❌ Download falhou ou arquivo corrompido!"
-        if [ -f "${fallback_path}" ] && validate_file "${fallback_path}"; then
-            echo "📁 Usando fallback ${fallback_path}"
-            cp "${fallback_path}" "${local_path}"
-        else
-            echo "❌ Fallback também não encontrado ou inválido!"
-            return 1
-        fi
-    fi
+#     # Se download falhou, tentar fallback
+#     if ! validate_file "${local_path}"; then
+#         echo "❌ Download falhou ou arquivo corrompido!"
+#         if [ -f "${fallback_path}" ] && validate_file "${fallback_path}"; then
+#             echo "📁 Usando fallback ${fallback_path}"
+#             cp "${fallback_path}" "${local_path}"
+#         else
+#             echo "❌ Fallback também não encontrado ou inválido!"
+#             return 1
+#         fi
+#     fi
     
-    # Validação final
-    if ! validate_file "${local_path}"; then
-        echo "❌ Arquivo basterisk.tar não encontrado ou inválido!"
-        echo "💡 Certifique-se de que o arquivo existe em: ${local_path}"
-        echo "💡 Ou baixe manualmente de: ${url}"
-        return 1
-    fi
+#     # Validação final
+#     if ! validate_file "${local_path}"; then
+#         echo "❌ Arquivo basterisk.tar não encontrado ou inválido!"
+#         echo "💡 Certifique-se de que o arquivo existe em: ${local_path}"
+#         echo "💡 Ou baixe manualmente de: ${url}"
+#         return 1
+#     fi
     
-    FILE_SIZE=$(du -h "${local_path}" | cut -f1)
-    echo "📁 Tamanho do arquivo: ${FILE_SIZE}"
-    return 0
-}
+#     FILE_SIZE=$(du -h "${local_path}" | cut -f1)
+#     echo "📁 Tamanho do arquivo: ${FILE_SIZE}"
+#     return 0
+# }
 
 # Função para instalar dependências básicas na VM
 install_vm_basics() {
@@ -88,7 +88,7 @@ install_vm_basics() {
         apt upgrade -y && \
         apt autoremove -y && \
         apt autoclean -y && \
-        apt install -y tree nano netcat-openbsd tcpdump > /dev/null 2>&1
+        apt install -y tree nano netcat-openbsd tcpdump git > /dev/null 2>&1
     "
 }
 
@@ -151,16 +151,13 @@ test_udp_connectivity() {
 install_asterisk() {
     local vm_name="$1"
     local basterisk_path="$2"
-    
-    echo "📤 Enviando basterisk.tar para a VM..."
-    sudo incus exec ${vm_name} -- mkdir -p /opt/asterisk-installer
-    cat ${basterisk_path} | sudo incus exec ${vm_name} -- tee /opt/asterisk-installer/basterisk.tar > /dev/null
-    
+    local project_url="$3"
+
     echo "🚀 Instalando Asterisk..."
     sudo incus exec ${vm_name} -- bash -c "
         cd /opt/asterisk-installer && \
-        tar xvf basterisk.tar && \
-        cd basterisk/basterisk && \
+        git clone ${project_url} basterisk && \
+        cd basterisk && \
         chmod +x INSTALL.sh && \
         ./INSTALL.sh
     "
