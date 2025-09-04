@@ -34,36 +34,6 @@ PORTS=(
     "61616:61616/tcp"
 )
 
-# Função para verificar se porta já existe no forward
-check_port_and_protocol() {
-    local port=$1
-    local protocol=$2
-    
-    # Verificar se o forward existe primeiro
-    if ! incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
-        return 1  # Forward não existe, porta não existe
-    fi
-    
-    # Verificar se a porta existe no forward
-    local forwards=$(incus network forward show incusbr0 "${HOST_IP}" -f yaml 2>/dev/null || echo "")
-    echo "$forwards" | awk -v port="$port" -v protocol="$protocol" '
-    /- protocol:/ { 
-        curr_protocol = $3 
-    }
-    /listen_port:/ {
-        if (curr_protocol == protocol && $2 == port) {
-            found = 1
-        }
-    }
-    END {
-        if (found) 
-            exit 0
-        else 
-            exit 1
-    }'
-    return $?
-}
-
 
 if ! sudo incus network show incusbr0 >/dev/null 2>&1; then
     echo "Criando rede incusbr0..."
@@ -78,39 +48,25 @@ fi
 # Criando network forward se não existir
 echo "Verificando network forward para ${HOST_IP}..."
 
-# Limpar forwards antigos que não sejam o atual
-echo "🧹 Limpando forwards antigos..."
-EXISTING_FORWARDS=$(incus network forward list incusbr0 --format csv | tail -n +2 | cut -d',' -f1)
-for forward_ip in $EXISTING_FORWARDS; do
-    if [ "$forward_ip" != "$HOST_IP" ]; then
-        echo "  Removendo forward antigo: $forward_ip"
-        if incus network forward delete incusbr0 "$forward_ip" --force 2>/dev/null; then
-            echo "  ✅ Forward $forward_ip removido com sucesso"
-        else
-            echo "  ⚠️  Falha ao remover $forward_ip (pode ter portas em uso)"
-            # Tentar remover todas as portas primeiro
-            echo "  🔧 Tentando limpar portas do forward $forward_ip..."
-            incus network forward show incusbr0 "$forward_ip" --format yaml 2>/dev/null | 
-            grep -E "(listen_port|protocol)" | 
-            awk '/protocol:/ {prot=$2} /listen_port:/ {print prot " " $2}' | 
-            while read protocol port; do
-                echo "    Removendo porta $port/$protocol"
-                incus network forward port remove incusbr0 "$forward_ip" "$protocol" "$port" 2>/dev/null || true
-            done
-            # Tentar remover o forward novamente
-            if incus network forward delete incusbr0 "$forward_ip" --force 2>/dev/null; then
-                echo "  ✅ Forward $forward_ip removido após limpeza das portas"
-            else
-                echo "  ❌ Não foi possível remover $forward_ip - continuando mesmo assim"
-            fi
-        fi
-    fi
-done
-
 if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
-    echo "Network forward ${HOST_IP} já existe."
+    echo "✅ Network forward ${HOST_IP} já existe."
+    echo "🧹 Limpando regras antigas (VM será recriada com novo IP)..."
+    
+    # Limpar todas as portas do forward existente
+    echo "  Removendo todas as regras de port forwarding antigas..."
+    incus network forward show incusbr0 "${HOST_IP}" --format yaml 2>/dev/null | \
+    grep -A1 -E "listen_port:" | \
+    grep -E "(listen_port|protocol):" | \
+    awk '/protocol:/ {prot=$2} /listen_port:/ {print prot " " $2}' | \
+    while read protocol port; do
+        if [ -n "$protocol" ] && [ -n "$port" ]; then
+            echo "    Removendo porta $port/$protocol"
+            incus network forward port remove incusbr0 "${HOST_IP}" "$protocol" "$port" 2>/dev/null || true
+        fi
+    done
+    echo "  ✅ Regras antigas removidas"
 else
-    echo "Criando network forward para ${HOST_IP}..."
+    echo "🔄 Criando network forward para ${HOST_IP}..."
     if incus network forward create incusbr0 "${HOST_IP}"; then
         echo "✅ Network forward criado com sucesso!"
     else
@@ -150,29 +106,24 @@ fi
 echo "✅ Network forward ${HOST_IP} confirmado"
 
 # Configurar portas básicas (SIP)
+echo "🔧 Configurando portas SIP e outras..."
 for port_pair in "${PORTS[@]}"; do
     IFS=':' read -r -a split_ports <<< "$port_pair"
     LISTEN_PORT=${split_ports[0]}
     TARGET_PORT=$(echo ${split_ports[1]} | cut -d'/' -f1)
     PROTOCOL=$(echo ${split_ports[1]} | cut -d'/' -f2)
 
-    echo "Configurando porta ${LISTEN_PORT}/${PROTOCOL} → ${VM_IP}:${TARGET_PORT}"
+    echo "  Porta ${LISTEN_PORT}/${PROTOCOL} → ${VM_IP}:${TARGET_PORT}"
     
-    if check_port_and_protocol $LISTEN_PORT $PROTOCOL; then
-        echo "  Removendo regra existente..."
-        incus network forward port remove incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} 2>/dev/null || echo "  ⚠️  Falha ao remover regra existente"
-    fi
-    
-    echo "  Adicionando nova regra..."
-    if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}; then
-        echo "  ✅ Regra adicionada com sucesso"
+    if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT} 2>/dev/null; then
+        echo "    ✅ Configurada"
     else
-        echo "  ⚠️  Erro ao adicionar regra para porta $LISTEN_PORT/$PROTOCOL"
+        echo "    ⚠️  Erro ao configurar porta $LISTEN_PORT/$PROTOCOL"
     fi
 done
 
 # Configurar portas RTP (UDP)
-echo "Configurando portas RTP ${HOST_RTP_START_PORT}-${HOST_RTP_END_PORT} → ${VM_IP}:10000-10079"
+echo "🔧 Configurando portas RTP ${HOST_RTP_START_PORT}-${HOST_RTP_END_PORT} → ${VM_IP}:10000-10079"
 RTP_SUCCESS=0
 RTP_TOTAL=0
 
@@ -180,16 +131,12 @@ for HOST_PORT in $(seq ${HOST_RTP_START_PORT} ${HOST_RTP_END_PORT}); do
     VM_PORT=$((10000 + HOST_PORT - HOST_RTP_START_PORT))
     RTP_TOTAL=$((RTP_TOTAL + 1))
     
-    if check_port_and_protocol $HOST_PORT "udp"; then
-        incus network forward port remove incusbr0 ${HOST_IP} udp ${HOST_PORT} 2>/dev/null || true
-    fi
-    
     if incus network forward port add incusbr0 ${HOST_IP} udp ${HOST_PORT} ${VM_IP} ${VM_PORT} 2>/dev/null; then
         RTP_SUCCESS=$((RTP_SUCCESS + 1))
     fi
 done
 
-echo "✅ Portas RTP configuradas: ${RTP_SUCCESS}/${RTP_TOTAL} sucessos"
+echo "✅ Portas RTP: ${RTP_SUCCESS}/${RTP_TOTAL} sucessos"
 
 echo "✅ Port forwarding configurado!"
 
