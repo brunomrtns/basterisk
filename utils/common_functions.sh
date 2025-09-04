@@ -85,7 +85,7 @@ test_udp_connectivity() {
 install_asterisk() {
     local vm_name="$1"
     local basterisk_path="$2"
-    local project_url="$3"
+    local project_url="${3:-https://github.com/brunomrtns/basterisk.git}"
 
     echo "🚀 Instalando Asterisk..."
     sudo incus exec ${vm_name} -- bash -c "
