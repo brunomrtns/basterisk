@@ -82,7 +82,7 @@ sudo incus remove ${VM_NAME} --force || true
 sudo incus launch images:ubuntu/jammy ${VM_NAME} -c limits.cpu=4 -c security.privileged=true -c limits.memory=4GiB -c boot.autostart=false --vm
 
 # Aguardar VM ficar pronta
-wait_vm_ready "${VM_NAME}" 60
+wait_system_ready "${VM_NAME}"
 
 # Obter IP da VM
 VM_IP=$(get_vm_ip "${VM_NAME}" "interface")

@@ -7,7 +7,6 @@ PARENT_PATH=$(
 )
 
 # Importar funções comuns
-source "${PARENT_PATH}/utils/wait_system_ready"
 source "${PARENT_PATH}/utils/common_functions.sh"
 
 VM_NAME="asterisk"

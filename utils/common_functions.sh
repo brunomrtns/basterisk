@@ -190,27 +190,65 @@ get_vm_ip() {
 }
 
 # Função para aguardar VM ficar pronta
-wait_vm_ready() {
-    local vm_name="$1"
-    local timeout="${2:-60}"
+wait_system_ready() {
+    containerName="${1}"
     
-    echo "⏳ Aguardando VM ${vm_name} ficar pronta..."
+    echo "==> Aguardando sistema da VM ${containerName} estar pronto..."
     
-    for i in $(seq 1 $timeout); do
-        STATUS=$(sudo incus list ${vm_name} -c s --format csv 2>/dev/null || echo "UNKNOWN")
-        if [ "$STATUS" = "RUNNING" ]; then
-            # Aguardar mais um pouco para sistema inicializar
+    
+    sudo incus project switch default >/dev/null 2>&1 || true
+
+    local looptest=""
+    local attempts=0
+    local max_attempts=60  
+    
+    while [ "${looptest}" != "running" ] && [ $attempts -lt $max_attempts ]; do
+        
+        if ! sudo incus list "${containerName}" --format csv >/dev/null 2>&1; then
+            echo "==> VM ${containerName} não encontrada, aguardando..."
             sleep 5
-            echo "✅ VM pronta!"
-            return 0
+            attempts=$((attempts + 1))
+            continue
         fi
-        echo "Aguardando VM: $STATUS (${i}/${timeout})"
-        sleep 2
+        
+        
+        vm_status=$(sudo incus list "${containerName}" -c s --format csv 2>/dev/null || echo "")
+        if [ "$vm_status" != "RUNNING" ]; then
+            echo "==> VM status: ${vm_status:-'unknown'}, aguardando..."
+            sleep 5
+            attempts=$((attempts + 1))
+            continue
+        fi
+        
+        
+        looptest="$(sudo incus exec "${containerName}" -- bash -c "systemctl is-system-running 2>/dev/null || echo -n" 2>/dev/null || echo -n)"
+        echo "==> System status: ${looptest:-'checking...'}"
+        
+        if [ "${looptest}" = 'degraded' ]; then
+            echo "==> Sistema degradado, tentando reset..."
+            sudo incus exec "${containerName}" -- bash -c "systemctl reset-failed 2>/dev/null || echo -n" 2>/dev/null || echo -n
+            sleep 10
+        elif [ "${looptest}" = 'running' ]; then
+            echo "==> Sistema pronto!"
+            break
+        else
+            echo "==> Aguardando sistema inicializar..."
+            sleep 3
+        fi
+        
+        attempts=$((attempts + 1))
     done
     
-    echo "❌ Timeout aguardando VM ficar pronta"
-    return 1
+    if [ $attempts -ge $max_attempts ]; then
+        echo "==> ⚠️  Timeout aguardando sistema ficar pronto (${max_attempts} tentativas)"
+        echo "==> Continuando mesmo assim..."
+    else
+        echo "==> ✅ Sistema pronto após $attempts tentativas"
+    fi
+    
+    sleep 3
 }
+
 
 # Função para exibir informações finais
 show_final_info() {
