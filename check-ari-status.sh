@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# curl -u admin:admin http://10.200.206.54:8088/asterisk/ari/asterisk/info
+
 # Importar funções comuns
 PARENT_PATH=$(
     cd "$(dirname "${BASH_SOURCE[0]}")"
