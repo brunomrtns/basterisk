@@ -77,6 +77,18 @@ fi
 
 # Criando network forward se não existir
 echo "Verificando network forward para ${HOST_IP}..."
+
+# Primeiro, vamos limpar forwards antigos se existirem
+echo "🧹 Limpando forwards antigos..."
+OLD_FORWARDS=$(incus network forward list incusbr0 --format csv | cut -d, -f1)
+for old_ip in $OLD_FORWARDS; do
+    if [ "$old_ip" != "$HOST_IP" ]; then
+        echo "  Removendo forward antigo: $old_ip"
+        incus network forward delete incusbr0 "$old_ip" --force 2>/dev/null || echo "  ⚠️  Falha ao remover $old_ip"
+    fi
+done
+
+# Agora verificar/criar o forward correto
 if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
     echo "Network forward ${HOST_IP} já existe."
 else
@@ -119,11 +131,6 @@ fi
 
 echo "✅ Network forward ${HOST_IP} confirmado"
 
-# Debug: Mostrar detalhes do forward
-echo "🔍 Detalhes do network forward:"
-incus network forward show incusbr0 "${HOST_IP}" || echo "Erro ao mostrar detalhes do forward"
-echo ""
-
 # Configurar portas básicas (SIP)
 for port_pair in "${PORTS[@]}"; do
     IFS=':' read -r -a split_ports <<< "$port_pair"
@@ -138,15 +145,11 @@ for port_pair in "${PORTS[@]}"; do
         incus network forward port remove incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} 2>/dev/null || echo "  ⚠️  Falha ao remover regra existente"
     fi
     
-    echo "  Comando: incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}"
+    echo "  Adicionando nova regra..."
     if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}; then
         echo "  ✅ Regra adicionada com sucesso"
     else
         echo "  ⚠️  Erro ao adicionar regra para porta $LISTEN_PORT/$PROTOCOL"
-        echo "  🔍 Listando forwards novamente:"
-        incus network forward list incusbr0
-        # Parar no primeiro erro para debug
-        break
     fi
 done
 
