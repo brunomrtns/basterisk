@@ -78,17 +78,35 @@ fi
 # Criando network forward se não existir
 echo "Verificando network forward para ${HOST_IP}..."
 
-# Primeiro, vamos limpar forwards antigos se existirem
+# Limpar forwards antigos que não sejam o atual
 echo "🧹 Limpando forwards antigos..."
-OLD_FORWARDS=$(incus network forward list incusbr0 --format csv | cut -d, -f1)
-for old_ip in $OLD_FORWARDS; do
-    if [ "$old_ip" != "$HOST_IP" ]; then
-        echo "  Removendo forward antigo: $old_ip"
-        incus network forward delete incusbr0 "$old_ip" --force 2>/dev/null || echo "  ⚠️  Falha ao remover $old_ip"
+EXISTING_FORWARDS=$(incus network forward list incusbr0 --format csv | tail -n +2 | cut -d',' -f1)
+for forward_ip in $EXISTING_FORWARDS; do
+    if [ "$forward_ip" != "$HOST_IP" ]; then
+        echo "  Removendo forward antigo: $forward_ip"
+        if incus network forward delete incusbr0 "$forward_ip" --force 2>/dev/null; then
+            echo "  ✅ Forward $forward_ip removido com sucesso"
+        else
+            echo "  ⚠️  Falha ao remover $forward_ip (pode ter portas em uso)"
+            # Tentar remover todas as portas primeiro
+            echo "  🔧 Tentando limpar portas do forward $forward_ip..."
+            incus network forward show incusbr0 "$forward_ip" --format yaml 2>/dev/null | 
+            grep -E "(listen_port|protocol)" | 
+            awk '/protocol:/ {prot=$2} /listen_port:/ {print prot " " $2}' | 
+            while read protocol port; do
+                echo "    Removendo porta $port/$protocol"
+                incus network forward port remove incusbr0 "$forward_ip" "$protocol" "$port" 2>/dev/null || true
+            done
+            # Tentar remover o forward novamente
+            if incus network forward delete incusbr0 "$forward_ip" --force 2>/dev/null; then
+                echo "  ✅ Forward $forward_ip removido após limpeza das portas"
+            else
+                echo "  ❌ Não foi possível remover $forward_ip - continuando mesmo assim"
+            fi
+        fi
     fi
 done
 
-# Agora verificar/criar o forward correto
 if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
     echo "Network forward ${HOST_IP} já existe."
 else
