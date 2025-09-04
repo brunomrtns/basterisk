@@ -1,0 +1,21 @@
+#!/bin/bash
+
+function wait_system_ready() {
+    containerName="${1}"
+
+    local looptest=""
+    while [ "${looptest}" != "running" ]; do
+        looptest="$(incus exec "${containerName}" -- bash -c "systemctl is-system-running || echo -n" || echo -n)"
+        echo "==> ${looptest}"
+        if [ "${looptest}" = 'degraded' ]; then
+            echo "==> RESET-FAILED"
+            incus exec "${containerName}" -- bash -c "systemctl reset-failed || echo -n" || echo -n
+            sleep 10
+        else
+            echo "==> Waiting..."
+            sleep 3
+        fi
+    done
+    echo "==> Done"
+    sleep 3
+}
