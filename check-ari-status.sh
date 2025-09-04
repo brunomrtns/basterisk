@@ -82,11 +82,11 @@ if timeout 3 curl -s http://$VM_IP:8088 > /dev/null 2>&1; then
     
     # 7. Testar autenticação ARI
     echo "7. Testando autenticação ARI..."
-    ARI_RESPONSE=$(timeout 5 curl -s -u admin:admin http://$VM_IP:8088/ari/asterisk/info 2>/dev/null)
-    if echo "$ARI_RESPONSE" | grep -q '"name"'; then
+    ARI_RESPONSE=$(timeout 5 curl -s -u admin:admin http://$VM_IP:8088/asterisk/ari/asterisk/info 2>/dev/null)
+    if echo "$ARI_RESPONSE" | grep -q '"version"'; then
         echo "   ✅ ARI está funcionando corretamente!"
         echo "   Informações do sistema:"
-        echo "$ARI_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(f'      Nome: {data.get(\"name\", \"N/A\")}'); print(f'      Versão: {data.get(\"version\", \"N/A\")}'); print(f'      Build: {data.get(\"build\", {}).get(\"date\", \"N/A\")}')" 2>/dev/null || echo "$ARI_RESPONSE"
+        echo "$ARI_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(f'      Versão: {data.get(\"system\", {}).get(\"version\", \"N/A\")}'); print(f'      Build: {data.get(\"build\", {}).get(\"date\", \"N/A\")}'); print(f'      Entity ID: {data.get(\"system\", {}).get(\"entity_id\", \"N/A\")}')" 2>/dev/null || echo "$ARI_RESPONSE"
     else
         echo "   ❌ ARI não está autenticando corretamente"
         echo "   Resposta: $ARI_RESPONSE"
@@ -113,6 +113,6 @@ echo "   3. Carregar módulos: asterisk -rx 'module load res_ari'"
 echo "   4. Reiniciar: systemctl restart asterisk"
 echo
 echo "📋 URLs de teste (quando funcionando):"
-echo "   - http://$VM_IP:8088/ari/asterisk/info"
-echo "   - ws://$VM_IP:8088/ari/events"
+echo "   - http://$VM_IP:8088/asterisk/ari/asterisk/info"
+echo "   - ws://$VM_IP:8088/asterisk/ari/events"
 echo "   - Credenciais: admin:admin"

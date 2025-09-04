@@ -96,13 +96,6 @@ install_asterisk() {
         chmod +x INSTALL.sh && \
         ./INSTALL.sh
     "
-    
-    # Configurar ARI usando função separada
-    if configure_ari "${vm_name}"; then
-        echo "✅ ARI configurado com sucesso!"
-    else
-        echo "⚠️  Configuração ARI falhou, mas Asterisk foi instalado"
-    fi
 }
 
 # Função para obter IP da VM
