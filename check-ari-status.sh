@@ -1,14 +1,31 @@
 #!/bin/bash
 
+# Importar funções comuns
+PARENT_PATH=$(
+    cd "$(dirname "${BASH_SOURCE[0]}")"
+    pwd -P
+)
+source "${PARENT_PATH}/utils/common_functions.sh"
+
 echo "=== Verificação de Status do ARI (SEM MODIFICAÇÕES) ==="
 echo
 
 # 1. Verificar se a VM está rodando
 echo "1. Verificando se a VM asterisk está ativa..."
-if incus info asterisk | grep -q "Status: Running"; then
+VM_STATUS=$(incus list asterisk --format csv | cut -d, -f2)
+if [ "$VM_STATUS" = "RUNNING" ]; then
     echo "   ✅ VM asterisk está rodando"
+    # Obter IP atual da VM usando a função comum
+    VM_IP=$(get_vm_ip "asterisk" "interface")
+    if [ $? -eq 0 ] && [ -n "$VM_IP" ]; then
+        echo "   IP da VM: $VM_IP"
+    else
+        echo "   ⚠️  Não foi possível obter IP da VM, usando método alternativo..."
+        VM_IP=$(incus list asterisk --format csv | cut -d, -f3 | cut -d' ' -f1)
+        echo "   IP da VM: $VM_IP"
+    fi
 else
-    echo "   ❌ VM asterisk não está rodando"
+    echo "   ❌ VM asterisk não está rodando (Status: $VM_STATUS)"
     exit 1
 fi
 echo
@@ -60,12 +77,12 @@ echo
 
 # 6. Testar conectividade ARI do host
 echo "6. Testando conectividade ARI do host..."
-if timeout 3 curl -s http://192.168.169.1:8088 > /dev/null 2>&1; then
+if timeout 3 curl -s http://$VM_IP:8088 > /dev/null 2>&1; then
     echo "   ✅ Porta 8088 acessível do host"
     
     # 7. Testar autenticação ARI
     echo "7. Testando autenticação ARI..."
-    ARI_RESPONSE=$(timeout 5 curl -s -u admin:admin http://192.168.169.1:8088/ari/asterisk/info 2>/dev/null)
+    ARI_RESPONSE=$(timeout 5 curl -s -u admin:admin http://$VM_IP:8088/ari/asterisk/info 2>/dev/null)
     if echo "$ARI_RESPONSE" | grep -q '"name"'; then
         echo "   ✅ ARI está funcionando corretamente!"
         echo "   Informações do sistema:"
@@ -83,7 +100,7 @@ else
         echo "      ✅ Port forwarding configurado"
     else
         echo "      ❌ Port forwarding não configurado para porta 8088"
-        echo "      Necessário adicionar: incus network forward port add incusbr0 [HOST_IP] tcp 8088 192.168.169.1 8088"
+        echo "      Necessário adicionar: incus network forward port add incusbr0 [HOST_IP] tcp 8088 $VM_IP 8088"
     fi
 fi
 
@@ -96,6 +113,6 @@ echo "   3. Carregar módulos: asterisk -rx 'module load res_ari'"
 echo "   4. Reiniciar: systemctl restart asterisk"
 echo
 echo "📋 URLs de teste (quando funcionando):"
-echo "   - http://192.168.169.1:8088/ari/asterisk/info"
-echo "   - ws://192.168.169.1:8088/ari/events"
+echo "   - http://$VM_IP:8088/ari/asterisk/info"
+echo "   - ws://$VM_IP:8088/ari/events"
 echo "   - Credenciais: admin:admin"
