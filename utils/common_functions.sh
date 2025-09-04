@@ -250,12 +250,24 @@ wait_system_ready() {
 }
 
 get_internet_ip_local_address() {
-  default_gateway=$(ip route show | grep default | awk '{print $3}')
-  ip_address=$(ip addr show dev $(ip route show | grep default | awk '{print $5}') | grep "inet " | awk '{print $2}' | cut -d '/' -f 1)
-  while [ "$ip_address" == "$default_gateway" ]; do
+  local default_gateway=$(ip route show | grep default | awk '{print $3}')
+  local interface=$(ip route show | grep default | awk '{print $5}' | head -1)
+  local ip_address=$(ip addr show dev "$interface" | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d '/' -f 1 | head -1)
+  
+  # Verificar se obtivemos um IP válido
+  if [ -z "$ip_address" ]; then
+    return 1
+  fi
+  
+  # Se o IP for igual ao gateway, aguardar (caso raro)
+  local attempts=0
+  while [ "$ip_address" == "$default_gateway" ] && [ $attempts -lt 5 ]; do
     sleep 1
-    ip_address=$(ip addr show dev $(ip route show | grep default | awk '{print $5}') | grep "inet " | awk '{print $2}' | cut -d '/' -f 1)
+    ip_address=$(ip addr show dev "$interface" | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d '/' -f 1 | head -1)
+    attempts=$((attempts + 1))
   done
+  
+  echo "$ip_address"
 }
 
 # Função para exibir informações finais
