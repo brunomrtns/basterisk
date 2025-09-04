@@ -249,6 +249,14 @@ wait_system_ready() {
     sleep 3
 }
 
+get_internet_ip_local_address() {
+  default_gateway=$(ip route show | grep default | awk '{print $3}')
+  ip_address=$(ip addr show dev $(ip route show | grep default | awk '{print $5}') | grep "inet " | awk '{print $2}' | cut -d '/' -f 1)
+  while [ "$ip_address" == "$default_gateway" ]; do
+    sleep 1
+    ip_address=$(ip addr show dev $(ip route show | grep default | awk '{print $5}') | grep "inet " | awk '{print $2}' | cut -d '/' -f 1)
+  done
+}
 
 # Função para exibir informações finais
 show_final_info() {
