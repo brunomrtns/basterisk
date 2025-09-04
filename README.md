@@ -28,7 +28,7 @@ Este projeto resolve o problema clássico do MACVLAN: **como conectar do host qu
 - Permissões sudo
 - Network Manager ativo
 
-> **Nota:** O arquivo `jasterisk.tar` (150MB) será baixado automaticamente do GitHub Releases.
+> **Nota:** O arquivo `basterisk.tar` (150MB) será baixado automaticamente do GitHub Releases.
 
 ## 🛠️ Scripts do Projeto
 
@@ -43,7 +43,7 @@ chmod +x create-vm-macvlan.sh
 
 **O que faz:**
 
-- ✅ **Baixa automaticamente** jasterisk.tar (150MB) do GitHub Releases
+- ✅ **Baixa automaticamente** basterisk.tar (150MB) do GitHub Releases
 - ✅ Detecta interface Ethernet automaticamente
 - ✅ Cria profile MACVLAN no Incus
 - ✅ Lança VM Ubuntu 22.04 com MACVLAN

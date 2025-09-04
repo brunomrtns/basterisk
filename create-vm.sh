@@ -10,9 +10,9 @@ PARENT_PATH=$(
 source "${PARENT_PATH}/utils/common_functions.sh"
 
 VM_NAME="asterisk"
-JASTERISK_TAR_URL="https://github.com/brunomrtns/basterisk/releases/download/1.0.0/jasterisk.tar"
-JASTERISK_FALLBACK="/home/bruno/Downloads/jasterisk.tar"
-JASTERISK_TAR_LOCAL="${PARENT_PATH}/jasterisk.tar"
+JASTERISK_TAR_URL="https://github.com/brunomrtns/basterisk/releases/download/1.0.0/basterisk.tar"
+JASTERISK_FALLBACK="/home/bruno/Downloads/basterisk.tar"
+JASTERISK_TAR_LOCAL="${PARENT_PATH}/basterisk.tar"
 HOST_IP=$(get_internet_ip_local_address)
 HOST_UDP_PORT="5060"
 echo "HOST IP: ${HOST_IP}"
@@ -113,8 +113,8 @@ done
 
 echo "✅ Port forwarding configurado!"
 
-# Baixar jasterisk
-if ! download_jasterisk "${JASTERISK_TAR_URL}" "${JASTERISK_TAR_LOCAL}" "${JASTERISK_FALLBACK}"; then
+# Baixar basterisk
+if ! download_basterisk "${JASTERISK_TAR_URL}" "${JASTERISK_TAR_LOCAL}" "${JASTERISK_FALLBACK}"; then
     exit 1
 fi
 

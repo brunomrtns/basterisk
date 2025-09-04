@@ -1,0 +1,250 @@
+#!/bin/bash
+
+set -e
+
+LOCAL_DIR=$(pwd)
+
+VERSION_SUFIX="${REPOSITORY_PATH}.${PACKAGE_RELEASE}"
+
+echo "LOCAL_DIR: ${LOCAL_DIR}"
+echo "PACKAGE_VERSION: ${PACKAGE_VERSION}"
+echo "PACKAGE_NAME: ${PACKAGE_NAME}"
+echo "PACKAGE_RELEASE: ${PACKAGE_RELEASE}"
+echo "VERSION_SUFIX: ${VERSION_SUFIX}"
+echo "REPOSITORY_PATH: ${REPOSITORY_PATH}"
+echo "TARGET_DISTRO: ${TARGET_DISTRO}"
+echo "TARGET_DISTRO_VERSION: ${TARGET_DISTRO_VERSION}"
+
+###########################################################################
+## 	Montando o diretório de trabalho para o pacote deb
+
+echo "Creating DEB Packaging Workspace."
+rm -Rf ~/debbuild
+mkdir -p ~/debbuild/BUILDROOT/DEBIAN
+mkdir -p ~/debbuild/SOURCES
+
+cp "src/"*.tar.gz ~/debbuild/SOURCES
+cd ~/debbuild/SOURCES
+tar -xvf *.tar.gz
+TMPDIR="$(pwd)/${PACKAGE_NAME}-${PACKAGE_VERSION}"
+[ ! -d "${TMPDIR}" ] && mv $(find -maxdepth 1 -type d | tail -n 1) "${TMPDIR}"
+cp -r "${LOCAL_DIR}/src/etc" "${TMPDIR}"
+cp "${LOCAL_DIR}/src/${PACKAGE_NAME}.sh" "${TMPDIR}"
+
+###########################################################################
+## 	Instalando programa em ~/debbuild/BUILDROOT/
+
+echo "Installing program in ~/debbuild/BUILDROOT/."
+cd "${TMPDIR}"
+echo "############ DEPENDS TEST #####################"
+DEPENDS=$("${TMPDIR}"/contrib/scripts/install_prereq test | grep "install -y" | sed 's/.* -y //g' | sed 's/ /, /g')
+# SECONDARY_DEPENDS="systemd, unzip, git, sox, gnupg2, curl, libnewt-dev, libssl-dev, libncurses5-dev, subversion, libsqlite3-dev, build-essential, libjansson-dev, libxml2-dev, libedit-dev, uuid-dev"
+
+# if [ -n "$DEPENDS" ]; then
+#     DEPENDS="${DEPENDS}, ${SECONDARY_DEPENDS}"
+# else
+#     DEPENDS="${SECONDARY_DEPENDS}"
+# fi
+
+# DEPENDS="${DEPENDS}, ${SECONDARY_DEPENDS}"
+# DEPENDS=$(echo "${DEPENDS}" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | sort -u | tr '\n' ',' | sed 's/,$//' | sed 's/, */, /g')
+
+echo "DEPENDS=${DEPENDS}"
+echo "############ DEPENDS INSTALL NONINTERACTIVE #####################"
+DEBIAN_FRONTEND=noninteractive apt-get -y install libvpb1
+echo "############ DEPENDS INSTALL #####################"
+contrib/scripts/install_prereq install
+echo
+
+echo "############ GET MP3 SOURCE #####################"
+contrib/scripts/get_mp3_source.sh
+echo
+
+echo "############ AJUSTES #####################"
+grep -Rin "^\#\!/usr/bin/env python$"
+echo "#########"
+grep -Rinl "^\#\!/usr/bin/env python$" | xargs -i@ sed -i 's/\#\!\/usr\/bin\/env\ python/\#\!\/usr\/bin\/env\ python2/g' @
+grep -Rin "^\#\!/usr/bin/env python"
+echo
+
+echo "############ CONFIGURE #####################"
+./configure --prefix=/usr/ --libdir=/usr/lib --with-jansson-bundled # Generate Makefile from Makefile.in
+echo "############ MAKE MENUSELECT #####################"
+make menuselect.makeopts
+menuselect/menuselect \
+	--enable chan_ooh323 \
+	--enable format_mp3 \
+	--enable codec_opus \
+	--enable codec_g729a \
+	--enable CORE-SOUNDS-EN-WAV \
+	--enable CORE-SOUNDS-EN-ULAW \
+	--enable CORE-SOUNDS-EN-ALAW \
+	--enable CORE-SOUNDS-EN-G729 \
+	--enable CORE-SOUNDS-EN-G722 \
+	--enable CORE-SOUNDS-EN-SLN16 \
+	--enable CORE-SOUNDS-EN-SIREN7 \
+	--enable CORE-SOUNDS-EN-SIREN14 \
+	--enable MOH-OPSOUND-WAV \
+	--enable MOH-OPSOUND-ULAW \
+	--enable MOH-OPSOUND-ALAW \
+	--enable MOH-OPSOUND-GSM \
+	--enable MOH-OPSOUND-G729 \
+	--enable MOH-OPSOUND-G722 \
+	--enable EXTRA-SOUNDS-EN-WAV \
+	--enable EXTRA-SOUNDS-EN-ULAW \
+	--enable EXTRA-SOUNDS-EN-ALAW \
+	--enable EXTRA-SOUNDS-EN-GSM \
+	--enable EXTRA-SOUNDS-EN-G729 \
+	--enable EXTRA-SOUNDS-EN-G722 \
+	--disable BUILD_NATIVE \
+	menuselect.makeopts
+
+if [ $? -eq 0 ]; then
+    echo "Menuselect configuration successful."
+else
+    echo "Menuselect configuration failed. Please check dependencies or module availability."
+    exit 1
+fi
+
+echo "############ MAKE #####################"
+make -j2 # Use Makefile to build the program
+echo "############ MAKE INSTALL #####################"
+make install DESTDIR=~/debbuild/BUILDROOT/ # Use Makefile to install the program
+echo "############ MAKE SAMPLES #####################"
+make install DESTDIR=~/debbuild/BUILDROOT/ # Use Makefile to install the program
+echo "############ MAKE BASIC-PBX #####################"
+make basic-pbx DESTDIR=~/debbuild/BUILDROOT/ # Use Makefile to install the program
+echo "############ MAKE CONFIG #####################"
+mkdir -p ~/debbuild/BUILDROOT/etc/init.d
+mkdir -p ~/debbuild/BUILDROOT/etc/default
+make config DESTDIR=~/debbuild/BUILDROOT/
+sed -i 's/#AST_USER=/AST_USER=/g' ~/debbuild/BUILDROOT/etc/default/asterisk
+sed -i 's/#AST_GROUP=/AST_GROUP=/g' ~/debbuild/BUILDROOT/etc/default/asterisk
+rm -Rf ~/debbuild/BUILDROOT/usr/share
+mkdir -p ~/debbuild/BUILDROOT/var/log/asterisk
+mkdir -p ~/debbuild/BUILDROOT/var/run/asterisk
+cp -r "${TMPDIR}/etc/asterisk" ~/debbuild/BUILDROOT/etc
+cd ~/debbuild/SOURCES
+cat >${PACKAGE_NAME} <<-EOF
+	#!/bin/bash
+	/usr/lib/${PACKAGE_NAME}/${PACKAGE_NAME}.sh \${@}
+EOF
+mkdir -p ~/debbuild/BUILDROOT/usr/bin
+install -m 0755 ${PACKAGE_NAME} ~/debbuild/BUILDROOT/usr/bin/
+mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
+mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
+cp -r ~/debbuild/BUILDROOT/etc/asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
+cp -r ${TMPDIR}/etc/cerberus_asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
+cp ${TMPDIR}/${PACKAGE_NAME}.sh ~/debbuild/BUILDROOT/usr/lib/basterisk
+
+echo "Checking installed size."
+INSTALLED_SIZE=$(du -s ~/debbuild/BUILDROOT)
+INSTALLED_SIZE=${INSTALLED_SIZE%%[^0-9]*}
+cd "${LOCAL_DIR}"
+
+###########################################################################
+## 	Criando arquivos de controle para o pacote deb.
+
+mapfile -t array < <(grep -n "^#" README.md | grep "${PACKAGE_NAME}" -A1 | cut -d: -f1)
+DESCRIPTION="$(sed -n "${array[0]},${array[1]:-\$} p" README.md | sed "/^#\|^$/d")"
+
+echo "Creating ~/debbuild/BUILDROOT/DEBIAN/control"
+echo \
+	"Package:${PACKAGE_NAME}
+Version: ${PACKAGE_VERSION}-${VERSION_SUFIX}
+Architecture: amd64
+Depends: ${DEPENDS}
+Conflicts: asterisk
+Installed-Size: ${INSTALLED_SIZE}
+Maintainer: Bruno Martins <brunomartinsss@gmail.com>
+Description: ${DESCRIPTION}
+" >~/debbuild/BUILDROOT/DEBIAN/control
+
+echo "#################################"
+cat ~/debbuild/BUILDROOT/DEBIAN/control
+echo "#################################"
+
+###########################################################################
+## 	Criando changelog para o pacote deb.
+
+mapfile -t array < <(grep -n "^#" README.md | grep "Changelog" -A1 | cut -d: -f1)
+CHANGELOG="$(sed -n "${array[0]},${array[1]:-\$} p" README.md | sed "/^#\|^$/d")"
+
+TEMPSTRING=""
+echo >~/debbuild/BUILDROOT/DEBIAN/changelog
+while read -r line; do
+	if [[ "${line}" =~ ^\* ]]; then
+		echo "${TEMPSTRING}" >>~/debbuild/BUILDROOT/DEBIAN/changelog
+		echo "${PACKAGE_NAME} (${line##*- }) unstable; urgency=low" >>~/debbuild/BUILDROOT/DEBIAN/changelog
+		TEMPSTRING="${line% -*}"
+		TEMPSTRING=" -- ${TEMPSTRING:18}  ${TEMPSTRING:2:3}, ${TEMPSTRING:10:2} ${TEMPSTRING:6:3} 00:00:00 +0300"
+	elif [[ "${line}" =~ ^"-" ]]; then
+		echo "  *${line:1}" >>~/debbuild/BUILDROOT/DEBIAN/changelog
+	fi
+done <<<"${CHANGELOG}"
+echo "${TEMPSTRING}" >>~/debbuild/BUILDROOT/DEBIAN/changelog
+sed -i '/^$/d' ~/debbuild/BUILDROOT/DEBIAN/changelog
+mkdir -p ~/debbuild/BUILDROOT/usr/share/doc/${PACKAGE_NAME}
+gzip -9 -c ~/debbuild/BUILDROOT/DEBIAN/changelog >~/debbuild/BUILDROOT/usr/share/doc/${PACKAGE_NAME}/changelog.Debian.gz
+echo "#################################"
+cat ~/debbuild/BUILDROOT/DEBIAN/changelog
+echo "#################################"
+
+###########################################################################
+## 	Criando postinst para o pacote deb.
+
+echo "Creating ~/debbuild/BUILDROOT/DEBIAN/postinst"
+echo \
+	"#!/bin/bash
+
+set -e
+
+echo \"POSTINST script\"
+getent group asterisk &>/dev/null || groupadd asterisk
+id asterisk &>/dev/null || useradd -r -d /var/lib/asterisk -g asterisk asterisk
+usermod -aG audio,dialout asterisk
+sed -i 's/;runuser=/runuser=/g' \"/etc/asterisk/asterisk.conf\"
+sed -i 's/;rungroup=/rungroup=/g' \"/etc/asterisk/asterisk.conf\"
+mkdir -p /etc/asterisk
+chown -R asterisk.asterisk /etc/asterisk
+mkdir -p /var/{lib,log,spool}/asterisk
+chown -R asterisk.asterisk /var/{lib,log,spool}/asterisk
+mkdir -p /usr/lib/asterisk
+chown -R asterisk.asterisk /usr/lib/asterisk
+chmod -R 750 /var/{lib,log,run,spool}/asterisk /usr/lib/asterisk /etc/asterisk
+ldconfig
+" >~/debbuild/BUILDROOT/DEBIAN/postinst
+chmod +x ~/debbuild/BUILDROOT/DEBIAN/postinst
+
+echo "#################################"
+cat ~/debbuild/BUILDROOT/DEBIAN/postinst
+echo "#################################"
+
+###########################################################################
+## 	Criando postrm para o pacote deb.
+
+echo "Creating ~/debbuild/BUILDROOT/DEBIAN/postrm"
+echo \
+	"#!/bin/bash
+
+set -e
+
+echo \"POSTRM script\"
+" >~/debbuild/BUILDROOT/DEBIAN/postrm
+chmod +x ~/debbuild/BUILDROOT/DEBIAN/postrm
+
+echo "#################################"
+cat ~/debbuild/BUILDROOT/DEBIAN/postrm
+echo "#################################"
+
+###########################################################################
+## 	O comando "dpkg-deb -b" está sendo usado aqui para montar o pacote deb
+##  atravez dos arquivos em ~/debbuild.
+
+echo "Creating .deb package."
+tree -a ~/debbuild
+mkdir -p "${LOCAL_DIR}/artifacts/$REPOSITORY_PATH/$TARGET_DISTRO/$TARGET_DISTRO_VERSION"
+dpkg-deb -Z xz -b ~/debbuild/BUILDROOT "${LOCAL_DIR}/artifacts/$REPOSITORY_PATH/$TARGET_DISTRO/$TARGET_DISTRO_VERSION"
+
+tree -a "${LOCAL_DIR}/artifacts/"
+echo "Done!"

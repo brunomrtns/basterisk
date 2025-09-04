@@ -1,0 +1,207 @@
+#!/bin/bash
+
+set -e
+
+LOCAL_DIR=$(pwd)
+
+VERSION_SUFIX="${REPOSITORY_PATH}.${PACKAGE_RELEASE}"
+
+echo "LOCAL_DIR: ${LOCAL_DIR}"
+echo "PACKAGE_VERSION: ${PACKAGE_VERSION}"
+echo "PACKAGE_NAME: ${PACKAGE_NAME}"
+echo "PACKAGE_RELEASE: ${PACKAGE_RELEASE}"
+echo "VERSION_SUFIX: ${VERSION_SUFIX}"
+echo "REPOSITORY_PATH: ${REPOSITORY_PATH}"
+echo "TARGET_DISTRO: ${TARGET_DISTRO}"
+echo "TARGET_DISTRO_VERSION: ${TARGET_DISTRO_VERSION}"
+
+###########################################################################
+## 	Montando o diretório de trabalho para o pacote rpm.
+
+echo "Creating RPM Packaging Workspace."
+rm -Rf ~/rpmbuild
+rpmdev-setuptree
+
+rm -Rf "/tmp/package_src/"
+mkdir -p "/tmp/package_src/"
+cp "src/"*.tar.gz "/tmp/package_src/"
+cd "/tmp/package_src/"
+tar -xvf *.tar.gz
+TMPDIR="/tmp/package_src/${PACKAGE_NAME}-${PACKAGE_VERSION}"
+[ ! -d "${TMPDIR}" ] && mv $(find -maxdepth 1 -type d | tail -n 1) "${TMPDIR}"
+cd "${TMPDIR}"
+cp -r "${LOCAL_DIR}/src/etc" "${TMPDIR}"
+cp "${LOCAL_DIR}/src/${PACKAGE_NAME}.sh" "${TMPDIR}"
+
+
+echo "############ DEPENDS TEST #####################"
+contrib/scripts/install_prereq test
+DEPENDS=$("${TMPDIR}"/contrib/scripts/install_prereq test | grep "\-\-assumeyes" | sed 's/.*--assumeyes //g')
+DEPENDS=${DEPENDS// hoard/ }
+echo "DEPENDS=${DEPENDS}"
+echo "############ DEPENDS INSTALL #####################"
+contrib/scripts/install_prereq install
+echo
+
+echo "############ GET MP3 SOURCE ################"
+contrib/scripts/get_mp3_source.sh
+echo
+
+echo "############ AJUSTES #####################"
+grep -Rin "^\#\!/usr/bin/env python$"
+echo "#########"
+grep -Rinl "^\#\!/usr/bin/env python$" | xargs -i@ sed -i 's/\#\!\/usr\/bin\/env\ python/\#\!\/usr\/bin\/env\ python2/g' @
+grep -Rin "^\#\!/usr/bin/env python"
+echo
+
+echo "############ TAR.GZ #####################"
+cd "/tmp/package_src/"
+tar -cvzf "${TMPDIR##*/}.tar.gz" "${TMPDIR##*/}"
+mv "${TMPDIR##*/}.tar.gz" ~/rpmbuild/SOURCES/
+cd "${LOCAL_DIR}"
+
+###########################################################################
+## 	Criando arquivos de especificação para o pacote rpm.
+
+mapfile -t array < <(grep -n "^#" README.md | grep "${PACKAGE_NAME}" -A1 | cut -d: -f1)
+DESCRIPTION="$(sed -n "${array[0]},${array[1]:-\$} p" README.md | sed "/^#\|^$/d")"
+SUMMARY="${DESCRIPTION%%.*}"
+
+mapfile -t array < <(grep -n "^#" README.md | grep "Changelog" -A1 | cut -d: -f1)
+CHANGELOG="$(sed -n "${array[0]},${array[1]:-\$} p" README.md | sed "/^#\|^$/d")"
+
+echo "Creating ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec"
+echo \
+"Name:           ${PACKAGE_NAME}
+Version:        ${PACKAGE_VERSION}
+Release:        ${VERSION_SUFIX}%{?dist}
+Summary:        ${SUMMARY}
+License:        Private
+Source0:        %{name}-%{version}.tar.gz
+BuildRequires:  ${DEPENDS}
+Requires:       ${DEPENDS}
+Conflicts:      asterisk
+
+%description
+${DESCRIPTION}
+
+%global debug_package %{nil}
+
+%prep
+%setup -q
+
+%build
+echo '############ CONFIGURE #####################'
+./configure --prefix=/usr/	--libdir=/usr/lib   --with-jansson-bundled
+echo '############ MAKE MENUSELECT #####################'
+make menuselect.makeopts
+menuselect/menuselect \
+--enable chan_ooh323 \
+--enable format_mp3 \
+--enable codec_opus \
+--enable codec_g729a \
+--enable CORE-SOUNDS-EN-WAV \
+--enable CORE-SOUNDS-EN-ULAW \
+--enable CORE-SOUNDS-EN-ALAW \
+--enable CORE-SOUNDS-EN-G729 \
+--enable CORE-SOUNDS-EN-G722 \
+--enable CORE-SOUNDS-EN-SLN16 \
+--enable CORE-SOUNDS-EN-SIREN7 \
+--enable CORE-SOUNDS-EN-SIREN14 \
+--enable MOH-OPSOUND-WAV \
+--enable MOH-OPSOUND-ULAW \
+--enable MOH-OPSOUND-ALAW \
+--enable MOH-OPSOUND-GSM \
+--enable MOH-OPSOUND-G729 \
+--enable MOH-OPSOUND-G722 \
+--enable EXTRA-SOUNDS-EN-WAV \
+--enable EXTRA-SOUNDS-EN-ULAW \
+--enable EXTRA-SOUNDS-EN-ALAW \
+--enable EXTRA-SOUNDS-EN-GSM \
+--enable EXTRA-SOUNDS-EN-G729 \
+--enable EXTRA-SOUNDS-EN-G722 \
+--disable BUILD_NATIVE \
+menuselect.makeopts
+echo '############ MAKE #####################'
+make %{?_smp_mflags}
+cat > %{name} <<-EOF
+#!/bin/bash
+%{_libdir}/%{name}/%{name}.sh \\\${@}
+EOF
+
+%install
+echo '############ MAKE INSTALL #####################'
+make install DESTDIR=%{buildroot}
+echo '############ MAKE SAMPLES #####################'
+make samples DESTDIR=%{buildroot}
+echo '############ MAKE CONFIG #####################'
+mkdir -p %{buildroot}/etc/rc.d/init.d
+mkdir -p %{buildroot}/etc/sysconfig
+make config DESTDIR=%{buildroot}
+sed -i 's/#AST_USER=/AST_USER=/g' %{buildroot}/etc/sysconfig/asterisk
+sed -i 's/#AST_GROUP=/AST_GROUP=/g' %{buildroot}/etc/sysconfig/asterisk
+rm -Rf %{buildroot}/usr/share
+mkdir -p %{buildroot}/var/log/asterisk
+mkdir -p %{buildroot}/var/run/asterisk
+cp -r "etc/asterisk" %{buildroot}
+mkdir -p %{buildroot}/%{_bindir}
+install -m 0755 %{name} %{buildroot}/%{_bindir}/
+for ((i=1;i<=2;i++)); do
+	mkdir -p %{buildroot}/%{_libdir}/%{name}/mode\${i}
+done
+cp -r etc/asterisk/* %{buildroot}/%{_libdir}/%{name}/mode1
+cp -r etc/cerberus_asterisk/* %{buildroot}/%{_libdir}/%{name}/mode2
+cp %{name}.sh %{buildroot}/%{_libdir}/%{name}
+
+echo \"Checking installed files.\"
+find %{buildroot} \( -type f -o -type l \) -print | eval \"sed 's,^%{buildroot},,g'\" | sed 's,^.*\.py$,&\*,g' >file-lists
+
+%files -f file-lists
+%dir /etc/asterisk
+%dir /var/log/asterisk
+%dir /var/run/asterisk
+
+%post
+echo \"POST script\"
+getent group asterisk &>/dev/null || groupadd asterisk
+id asterisk &>/dev/null || useradd -r -d /var/lib/asterisk -g asterisk asterisk
+usermod -aG audio,dialout asterisk
+mkdir -p /etc/asterisk
+chown -R asterisk.asterisk /etc/asterisk
+mkdir -p /var/{lib,log,spool}/asterisk
+chown -R asterisk.asterisk /var/{lib,log,spool}/asterisk
+mkdir -p /usr/lib/asterisk
+chown -R asterisk.asterisk /usr/lib/asterisk
+chmod -R 750 /var/{lib,log,run,spool}/asterisk /usr/lib/asterisk /etc/asterisk
+ldconfig
+
+%postun
+echo \"POSTUN script\"
+
+%changelog
+${CHANGELOG}
+" >~/rpmbuild/SPECS/${PACKAGE_NAME}.spec
+
+if [ "${TARGET_DISTRO}" == "fedora" ] ; then 
+	eval "sed -i 's,--with-jansson-bundled,,g' ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec"
+fi
+
+echo "#################################"
+cat ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec
+echo "#################################"
+
+###########################################################################
+## 	O comando "rpmbuild -bb" está sendo usado aqui para montar o pacote rpm
+##  atravez dos arquivos em ~/rpmbuild.
+
+echo "Creating .rpm package."
+tree -a ~/rpmbuild
+mkdir -p "${LOCAL_DIR}/artifacts/${REPOSITORY_PATH}/${TARGET_DISTRO}/${TARGET_DISTRO_VERSION}"
+rpmbuild -bb ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec
+find ~/rpmbuild/RPMS
+for PACKAGE in $(find ~/rpmbuild/RPMS \( -name "*-*.rpm" -a -not -name "*-*debug*-*.rpm" \)); do
+	mv "${PACKAGE}" "${LOCAL_DIR}/artifacts/${REPOSITORY_PATH}/${TARGET_DISTRO}/${TARGET_DISTRO_VERSION}/"
+done
+
+tree -a "${LOCAL_DIR}/artifacts/"
+echo "Done!"

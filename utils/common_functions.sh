@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Função para validar arquivo jasterisk.tar
+# Função para validar arquivo basterisk.tar
 validate_file() {
     local file_path="$1"
     if [ -f "$file_path" ] && [ -s "$file_path" ]; then
@@ -12,17 +12,17 @@ validate_file() {
     return 1
 }
 
-# Função para baixar jasterisk.tar
-download_jasterisk() {
+# Função para baixar basterisk.tar
+download_basterisk() {
     local url="$1"
     local local_path="$2"
     local fallback_path="$3"
     
-    echo "📥 Verificando jasterisk.tar..."
+    echo "📥 Verificando basterisk.tar..."
     
     # Verificar se arquivo local existe e é válido
     if validate_file "${local_path}"; then
-        echo "✅ jasterisk.tar válido encontrado: ${local_path}"
+        echo "✅ basterisk.tar válido encontrado: ${local_path}"
         return 0
     fi
     
@@ -67,7 +67,7 @@ download_jasterisk() {
     
     # Validação final
     if ! validate_file "${local_path}"; then
-        echo "❌ Arquivo jasterisk.tar não encontrado ou inválido!"
+        echo "❌ Arquivo basterisk.tar não encontrado ou inválido!"
         echo "💡 Certifique-se de que o arquivo existe em: ${local_path}"
         echo "💡 Ou baixe manualmente de: ${url}"
         return 1
@@ -150,17 +150,17 @@ test_udp_connectivity() {
 # Função para instalar Asterisk
 install_asterisk() {
     local vm_name="$1"
-    local jasterisk_path="$2"
+    local basterisk_path="$2"
     
-    echo "📤 Enviando jasterisk.tar para a VM..."
+    echo "📤 Enviando basterisk.tar para a VM..."
     sudo incus exec ${vm_name} -- mkdir -p /opt/asterisk-installer
-    cat ${jasterisk_path} | sudo incus exec ${vm_name} -- tee /opt/asterisk-installer/jasterisk.tar > /dev/null
+    cat ${basterisk_path} | sudo incus exec ${vm_name} -- tee /opt/asterisk-installer/basterisk.tar > /dev/null
     
     echo "🚀 Instalando Asterisk..."
     sudo incus exec ${vm_name} -- bash -c "
         cd /opt/asterisk-installer && \
-        tar xvf jasterisk.tar && \
-        cd jasterisk/jasterisk && \
+        tar xvf basterisk.tar && \
+        cd basterisk/basterisk && \
         chmod +x INSTALL.sh && \
         ./INSTALL.sh
     "
