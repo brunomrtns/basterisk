@@ -24,9 +24,11 @@ Este projeto resolve o problema clássico do MACVLAN: **como conectar do host qu
 ### Software
 
 - Ubuntu/Linux com Incus/LXD instalado
-- Arquivo `jasterisk.tar` em `/home/bruno/Downloads/`
+- `wget` ou `curl` para download automático
 - Permissões sudo
 - Network Manager ativo
+
+> **Nota:** O arquivo `jasterisk.tar` (150MB) será baixado automaticamente do GitHub Releases.
 
 ## 🛠️ Scripts do Projeto
 
@@ -41,6 +43,7 @@ chmod +x create-vm-macvlan.sh
 
 **O que faz:**
 
+- ✅ **Baixa automaticamente** jasterisk.tar (150MB) do GitHub Releases
 - ✅ Detecta interface Ethernet automaticamente
 - ✅ Cria profile MACVLAN no Incus
 - ✅ Lança VM Ubuntu 22.04 com MACVLAN

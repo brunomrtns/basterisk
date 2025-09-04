@@ -12,7 +12,7 @@ HOST_UDP_PORT="5060"
 HOST_RTP_START_PORT="4020"
 HOST_RTP_END_PORT="4099"
 
-# 2️⃣ Criar rede gerenciada com NAT, se não existir
+
 if ! sudo incus network show incusbr0 >/dev/null 2>&1; then
     echo "Criando rede incusbr0..."
     sudo incus network create incusbr0 bridge.driver=linux
@@ -28,7 +28,7 @@ sudo incus remove ${VM_NAME} --force || true
 sudo incus launch images:ubuntu/jammy ${VM_NAME} --profile macvlanprofile -c limits.cpu=4 -c security.privileged=true -c limits.memory=4GiB -c boot.autostart=false --vm
 
 
-# 4️⃣ Plugar VM na rede incusbr0 se ainda não estiver
+
 if ! sudo incus config device list ${VM_NAME} | grep -q "^eth0"; then
     echo "Adicionando eth0 à rede incusbr0..."
     sudo incus config device add ${VM_NAME} eth0 nic network=incusbr0
@@ -36,14 +36,14 @@ else
     echo "eth0 já está configurada, pulando..."
 fi
 
-# 5️⃣ Reiniciar VM para aplicar alterações de rede
+
 sudo incus restart ${VM_NAME}
 
-# Aguardar VM inicializar e obter IP
+
 echo "Aguardando VM inicializar..."
 sleep 10
 
-# Descobrir IP da VM
+
 echo "Obtendo IP da VM..."
 VM_IP=""
 for i in {1..30}; do
@@ -64,66 +64,66 @@ fi
 echo "VM IP: ${VM_IP}"
 sleep 10
 
-# 6️⃣ Adicionar port forwarding via proxy devices
+
 echo "Configurando port forwarding..."
 
-# Remover dispositivos existentes para recriar com IP correto
+
 sudo incus config device remove ${VM_NAME} sip-tcp 2>/dev/null || true
 sudo incus config device remove ${VM_NAME} sip-udp 2>/dev/null || true
 sudo incus config device remove ${VM_NAME} rtp 2>/dev/null || true
 
-# SIP 5060 TCP
+
 echo "Adicionando proxy device SIP TCP..."
 sudo incus config device add ${VM_NAME} sip-tcp proxy listen=tcp:0.0.0.0:${HOST_UDP_PORT} connect=tcp:${VM_IP}:5060
 
-# SIP 5060 UDP
+
 echo "Adicionando proxy device SIP UDP..."
 sudo incus config device add ${VM_NAME} sip-udp proxy listen=udp:0.0.0.0:${HOST_UDP_PORT} connect=udp:${VM_IP}:5060
 
-# RTP 10000–20000 UDP
+
 echo "Adicionando proxy device RTP UDP..."
 sudo incus config device add ${VM_NAME} rtp proxy listen=udp:0.0.0.0:${HOST_RTP_START_PORT}-${HOST_RTP_END_PORT} connect=udp:${VM_IP}:10000-20000
 
-# 7️⃣ Criar diretório de instalação na VM se não existir
+
 sudo incus exec ${VM_NAME} -- mkdir -p /opt/asterisk-installer
 
-# 8️⃣ Copiar jasterisk.tar para a VM
+
 echo "Enviando jasterisk.tar para a VM..."
 cat $JASTERISK_TAR_PATH | sudo incus exec ${VM_NAME} -- tee /opt/asterisk-installer/jasterisk.tar > /dev/null
 
 echo "🔍 Testando conectividade do proxy UDP..."
 
-# 1️⃣ Instalar ferramentas na VM (tcpdump e netcat)
+
 sudo incus exec ${VM_NAME} -- bash -c "
     apt update -y && apt install -y netcat-openbsd tcpdump > /dev/null 2>&1
 "
 
-# 2️⃣ Criar um identificador único para o teste
+
 TEST_ID="proxy-test-$(date +%s)-$$"
 echo "ID do teste: $TEST_ID"
 
-# 3️⃣ Rodar tcpdump na VM para capturar pacotes UDP com conteúdo específico
+
 echo "Iniciando captura de pacotes UDP na VM..."
 sudo incus exec ${VM_NAME} -- bash -c "
     timeout 10 tcpdump -i any udp port 5060 -A -n > /tmp/udp_test.log 2>&1 &
     echo \$! > /tmp/tcpdump.pid
 " &
 
-# 4️⃣ Dar tempo para o tcpdump iniciar
+
 sleep 3
 
-# 5️⃣ Enviar pacote com identificador único do host para VM via proxy
+
 echo "Enviando pacote de teste: host:${HOST_UDP_PORT} → VM:5060"
 echo "PROXY_TEST_${TEST_ID}_SUCCESS" | nc -u -w2 127.0.0.1 ${HOST_UDP_PORT} 2>/dev/null || echo "Comando nc executado"
 
-# 6️⃣ Esperar o tcpdump capturar
+
 sleep 4
 
-# 7️⃣ Parar tcpdump e verificar se recebeu nosso pacote específico
+
 sudo incus exec ${VM_NAME} -- bash -c "pkill tcpdump 2>/dev/null || true"
 sleep 1
 
-# 8️⃣ Verificar se o conteúdo específico chegou na VM
+
 PACKET_FOUND=$(sudo incus exec ${VM_NAME} -- bash -c "
     if [ -f /tmp/udp_test.log ]; then
         grep -c 'PROXY_TEST_${TEST_ID}_SUCCESS' /tmp/udp_test.log 2>/dev/null || echo '0'
@@ -167,7 +167,7 @@ else
     exit 1
 fi
 
-# 9️⃣ Descompactar e rodar INSTALL.sh
+
 echo "Instalando Asterisk..."
 sudo incus exec ${VM_NAME} -- bash -c "
 	apt update -y && \

@@ -2,20 +2,59 @@
 
 function wait_system_ready() {
     containerName="${1}"
+    
+    echo "==> Aguardando sistema da VM ${containerName} estar pronto..."
+    
+    
+    sudo incus project switch default >/dev/null 2>&1 || true
 
     local looptest=""
-    while [ "${looptest}" != "running" ]; do
-        looptest="$(incus exec "${containerName}" -- bash -c "systemctl is-system-running || echo -n" || echo -n)"
-        echo "==> ${looptest}"
+    local attempts=0
+    local max_attempts=60  
+    
+    while [ "${looptest}" != "running" ] && [ $attempts -lt $max_attempts ]; do
+        
+        if ! sudo incus list "${containerName}" --format csv >/dev/null 2>&1; then
+            echo "==> VM ${containerName} não encontrada, aguardando..."
+            sleep 5
+            attempts=$((attempts + 1))
+            continue
+        fi
+        
+        
+        vm_status=$(sudo incus list "${containerName}" -c s --format csv 2>/dev/null || echo "")
+        if [ "$vm_status" != "RUNNING" ]; then
+            echo "==> VM status: ${vm_status:-'unknown'}, aguardando..."
+            sleep 5
+            attempts=$((attempts + 1))
+            continue
+        fi
+        
+        
+        looptest="$(sudo incus exec "${containerName}" -- bash -c "systemctl is-system-running 2>/dev/null || echo -n" 2>/dev/null || echo -n)"
+        echo "==> System status: ${looptest:-'checking...'}"
+        
         if [ "${looptest}" = 'degraded' ]; then
-            echo "==> RESET-FAILED"
-            incus exec "${containerName}" -- bash -c "systemctl reset-failed || echo -n" || echo -n
+            echo "==> Sistema degradado, tentando reset..."
+            sudo incus exec "${containerName}" -- bash -c "systemctl reset-failed 2>/dev/null || echo -n" 2>/dev/null || echo -n
             sleep 10
+        elif [ "${looptest}" = 'running' ]; then
+            echo "==> Sistema pronto!"
+            break
         else
-            echo "==> Waiting..."
+            echo "==> Aguardando sistema inicializar..."
             sleep 3
         fi
+        
+        attempts=$((attempts + 1))
     done
-    echo "==> Done"
+    
+    if [ $attempts -ge $max_attempts ]; then
+        echo "==> ⚠️  Timeout aguardando sistema ficar pronto (${max_attempts} tentativas)"
+        echo "==> Continuando mesmo assim..."
+    else
+        echo "==> ✅ Sistema pronto após $attempts tentativas"
+    fi
+    
     sleep 3
 }

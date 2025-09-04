@@ -7,10 +7,12 @@ PARENT_PATH=$(
     pwd -P
 )
 
-source "${PARENT_PATH}/wait_system_ready"
+source "${PARENT_PATH}/utils/wait_system_ready"
 
 VM_NAME="asterisk"
-JASTERISK_TAR_PATH="/home/bruno/Downloads/jasterisk.tar"
+JASTERISK_TAR_URL="https://github.com/brunomrtns/basterisk/releases/download/1.0.0/jasterisk.tar"
+JASTERISK_FALLBACK="/home/bruno/Downloads/jasterisk.tar"
+JASTERISK_TAR_LOCAL="${PARENT_PATH}/jasterisk.tar"
 HOST_UDP_PORT="5060"
 HOST_RTP_START_PORT="4020"
 HOST_RTP_END_PORT="4099"
@@ -57,7 +59,7 @@ timeout 60 sudo incus launch images:ubuntu/jammy ${VM_NAME} --profile macvlanpro
 wait_system_ready "${VM_NAME}"
 
 echo "Reiniciando VM..."
-sudo incus restart ${VM_NAME} >/dev/null 2>&1 &
+nohup sudo incus restart ${VM_NAME} >/dev/null 2>&1 &
 
 wait_system_ready "${VM_NAME}"
 
@@ -147,7 +149,8 @@ PACKET_FOUND=$(sudo incus exec ${VM_NAME} -- bash -c "
 
 echo "Pacotes com ID encontrados: $PACKET_FOUND"
 
-if [ "$PACKET_FOUND" -ge 1 ]; then
+
+if [[ "$PACKET_FOUND" =~ ^[0-9]+$ ]] && [ "$PACKET_FOUND" -ge 1 ]; then
     echo "✅ Conectividade UDP direta funcionando! Pacote chegou à VM."
     echo "Log do tcpdump mostrando pacote:"
     sudo incus exec ${VM_NAME} -- grep -A2 -B2 "DIRECT_TEST_${TEST_ID}_SUCCESS" /tmp/udp_test.log 2>/dev/null || true
@@ -158,8 +161,77 @@ fi
 
 sudo incus exec ${VM_NAME} -- mkdir -p /opt/asterisk-installer
 
-echo "Enviando jasterisk.tar para a VM..."
-cat $JASTERISK_TAR_PATH | sudo incus exec ${VM_NAME} -- tee /opt/asterisk-installer/jasterisk.tar > /dev/null
+
+echo "📥 Verificando jasterisk.tar..."
+
+
+validate_file() {
+    local file_path="$1"
+    if [ -f "$file_path" ] && [ -s "$file_path" ]; then
+        
+        if file "$file_path" | grep -q "tar archive\|gzip compressed"; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+
+if validate_file "${JASTERISK_TAR_LOCAL}"; then
+    echo "✅ jasterisk.tar válido encontrado: ${JASTERISK_TAR_LOCAL}"
+else
+    echo "🔄 Arquivo não encontrado ou inválido, obtendo novo..."
+    
+    rm -f "${JASTERISK_TAR_LOCAL}"
+    
+    echo "📥 Tentando download do GitHub..."
+    
+    if command -v wget >/dev/null 2>&1; then
+        echo "🔄 Baixando via wget..."
+        if wget --progress=bar:force --timeout=60 --tries=3 -O "${JASTERISK_TAR_LOCAL}" "${JASTERISK_TAR_URL}"; then
+            echo "✅ Download via wget concluído!"
+        else
+            echo "❌ Falha no download via wget"
+            rm -f "${JASTERISK_TAR_LOCAL}"
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        echo "🔄 Baixando via curl..."
+        if curl --progress-bar --connect-timeout 60 --retry 3 -L -o "${JASTERISK_TAR_LOCAL}" "${JASTERISK_TAR_URL}"; then
+            echo "✅ Download via curl concluído!"
+        else
+            echo "❌ Falha no download via curl"
+            rm -f "${JASTERISK_TAR_LOCAL}"
+        fi
+    else
+        echo "❌ wget ou curl não encontrado!"
+        echo "💡 Instale: sudo apt install wget curl"
+    fi
+    
+    
+    if ! validate_file "${JASTERISK_TAR_LOCAL}"; then
+        echo "❌ Download falhou ou arquivo corrompido!"
+        if [ -f "${JASTERISK_TAR_LOCAL}" ]; then
+            echo "Usando fallback ${JASTERISK_FALLBACK}"
+            JASTERISK_TAR_LOCAL="${JASTERISK_FALLBACK}"
+        else
+            exit 1
+        fi
+    fi
+fi
+
+
+if ! validate_file "${JASTERISK_TAR_LOCAL}"; then
+    echo "❌ Arquivo jasterisk.tar não encontrado ou inválido!"
+    echo "💡 Certifique-se de que o arquivo existe em: ${JASTERISK_TAR_LOCAL}"
+    echo "💡 Ou baixe manualmente de: ${JASTERISK_TAR_URL}"
+    exit 1
+fi
+
+FILE_SIZE=$(du -h "${JASTERISK_TAR_LOCAL}" | cut -f1)
+echo "📁 Tamanho do arquivo: ${FILE_SIZE}"
+
+echo "📤 Enviando jasterisk.tar para a VM..."
+cat $JASTERISK_TAR_LOCAL | sudo incus exec ${VM_NAME} -- tee /opt/asterisk-installer/jasterisk.tar > /dev/null
 
 echo "Instalando Asterisk..."
 sudo incus exec ${VM_NAME} -- bash -c "
