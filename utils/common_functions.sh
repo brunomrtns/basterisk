@@ -91,7 +91,7 @@ install_asterisk() {
     sudo incus exec ${vm_name} -- bash -c "
         mkdir -p /opt/asterisk-installer && \
         cd /opt/asterisk-installer && \
-        git clone ${project_url} basterisk && \
+        git clone ${project_url} && \
         cd basterisk && \
         chmod +x INSTALL.sh && \
         ./INSTALL.sh
