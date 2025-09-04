@@ -110,11 +110,6 @@ install_vm_basics "${VM_NAME}"
 # Testar conectividade UDP direta
 test_udp_connectivity "${VM_NAME}" "${VM_IP}" "5060" "direct"
 
-# # Baixar basterisk
-# if ! download_basterisk "${JASTERISK_TAR_URL}" "${JASTERISK_TAR_LOCAL}" "${JASTERISK_FALLBACK}"; then
-#     exit 1
-# fi
-
 # Instalar Asterisk
 install_asterisk "${VM_NAME}" "${JASTERISK_TAR_LOCAL}"
 
