@@ -15,8 +15,6 @@ JASTERISK_FALLBACK="/home/bruno/Downloads/jasterisk.tar"
 JASTERISK_TAR_LOCAL="${PARENT_PATH}/jasterisk.tar"
 HOST_IP=$(get_internet_ip_local_address)
 HOST_UDP_PORT="5060"
-HOST_RTP_START_PORT="4020"
-HOST_RTP_END_PORT="4099"
 echo "HOST IP: ${HOST_IP}"
 # Portas que serão encaminhadas
 PORTS=(
@@ -46,9 +44,6 @@ else
 fi
 
 # Criando network forward se não existir
-echo "Verificando network forward para ${HOST_IP}..."
-
-# Criando network forward (sempre limpo)
 echo "Verificando network forward para ${HOST_IP}..."
 
 if incus network forward list incusbr0 --format csv | grep -q "${HOST_IP}"; then
@@ -115,22 +110,6 @@ for port_pair in "${PORTS[@]}"; do
         echo "    ❌ Erro ao configurar porta $LISTEN_PORT/$PROTOCOL"
     fi
 done
-
-# Configurar portas RTP (UDP)
-echo "🔧 Configurando portas RTP ${HOST_RTP_START_PORT}-${HOST_RTP_END_PORT} → ${VM_IP}:10000-10079"
-RTP_SUCCESS=0
-RTP_TOTAL=0
-
-for HOST_PORT in $(seq ${HOST_RTP_START_PORT} ${HOST_RTP_END_PORT}); do
-    VM_PORT=$((10000 + HOST_PORT - HOST_RTP_START_PORT))
-    RTP_TOTAL=$((RTP_TOTAL + 1))
-    
-    if incus network forward port add incusbr0 ${HOST_IP} udp ${HOST_PORT} ${VM_IP} ${VM_PORT} 2>/dev/null; then
-        RTP_SUCCESS=$((RTP_SUCCESS + 1))
-    fi
-done
-
-echo "✅ Portas RTP: ${RTP_SUCCESS}/${RTP_TOTAL} sucessos"
 
 echo "✅ Port forwarding configurado!"
 
