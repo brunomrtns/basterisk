@@ -17,7 +17,7 @@ HOST_IP=$(get_internet_ip_local_address)
 HOST_UDP_PORT="5060"
 HOST_RTP_START_PORT="4020"
 HOST_RTP_END_PORT="4099"
-
+echo "HOST IP: ${HOST_IP}"
 # Portas que serão encaminhadas
 PORTS=(
     "5060:5060/tcp"   
