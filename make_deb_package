@@ -29,7 +29,7 @@ tar -xvf *.tar.gz
 TMPDIR="$(pwd)/${PACKAGE_NAME}-${PACKAGE_VERSION}"
 [ ! -d "${TMPDIR}" ] && mv $(find -maxdepth 1 -type d | tail -n 1) "${TMPDIR}"
 cp -r "${LOCAL_DIR}/src/etc" "${TMPDIR}"
-cp "${LOCAL_DIR}/src/${PACKAGE_NAME}.sh" "${TMPDIR}"
+# cp "${LOCAL_DIR}/src/${PACKAGE_NAME}.sh" "${TMPDIR}"
 
 ###########################################################################
 ## 	Instalando programa em ~/debbuild/BUILDROOT/
@@ -131,11 +131,11 @@ cat >${PACKAGE_NAME} <<-EOF
 EOF
 mkdir -p ~/debbuild/BUILDROOT/usr/bin
 install -m 0755 ${PACKAGE_NAME} ~/debbuild/BUILDROOT/usr/bin/
-mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
-mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
-cp -r ~/debbuild/BUILDROOT/etc/asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
-cp -r ${TMPDIR}/etc/cerberus_asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
-cp ${TMPDIR}/${PACKAGE_NAME}.sh ~/debbuild/BUILDROOT/usr/lib/basterisk
+# mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
+# mkdir -p ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
+# cp -r ~/debbuild/BUILDROOT/etc/asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode1
+# cp -r ${TMPDIR}/etc/cerberus_asterisk/* ~/debbuild/BUILDROOT/usr/lib/basterisk/mode2
+# cp ${TMPDIR}/${PACKAGE_NAME}.sh ~/debbuild/BUILDROOT/usr/lib/basterisk
 
 echo "Checking installed size."
 INSTALLED_SIZE=$(du -s ~/debbuild/BUILDROOT)

@@ -31,7 +31,6 @@ TMPDIR="/tmp/package_src/${PACKAGE_NAME}-${PACKAGE_VERSION}"
 [ ! -d "${TMPDIR}" ] && mv $(find -maxdepth 1 -type d | tail -n 1) "${TMPDIR}"
 cd "${TMPDIR}"
 cp -r "${LOCAL_DIR}/src/etc" "${TMPDIR}"
-cp "${LOCAL_DIR}/src/${PACKAGE_NAME}.sh" "${TMPDIR}"
 
 
 echo "############ DEPENDS TEST #####################"
@@ -146,12 +145,6 @@ mkdir -p %{buildroot}/var/run/asterisk
 cp -r "etc/asterisk" %{buildroot}
 mkdir -p %{buildroot}/%{_bindir}
 install -m 0755 %{name} %{buildroot}/%{_bindir}/
-for ((i=1;i<=2;i++)); do
-	mkdir -p %{buildroot}/%{_libdir}/%{name}/mode\${i}
-done
-cp -r etc/asterisk/* %{buildroot}/%{_libdir}/%{name}/mode1
-cp -r etc/cerberus_asterisk/* %{buildroot}/%{_libdir}/%{name}/mode2
-cp %{name}.sh %{buildroot}/%{_libdir}/%{name}
 
 echo \"Checking installed files.\"
 find %{buildroot} \( -type f -o -type l \) -print | eval \"sed 's,^%{buildroot},,g'\" | sed 's,^.*\.py$,&\*,g' >file-lists
