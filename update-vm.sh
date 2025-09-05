@@ -20,7 +20,7 @@ if ! incus list --format csv | grep -q "^${VM_NAME},"; then
 fi
 
 # Verificar se a VM está rodando
-VM_STATUS=$(incus list --format csv | grep "^${VM_NAME}," | cut -d',' -f3)
+VM_STATUS=$(incus list --format csv | grep "^${VM_NAME}," | cut -d',' -f2)
 if [[ "${VM_STATUS}" != "RUNNING" ]]; then
     echo "❌ Erro: VM '${VM_NAME}' não está rodando (status: ${VM_STATUS})"
     echo "Execute: incus start ${VM_NAME}"
