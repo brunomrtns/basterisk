@@ -101,7 +101,7 @@ incus exec ${VM_NAME} -- sed -i '/^deb .*ubuntu.com/! s/^deb /# /' /etc/apt/sour
 incus exec ${VM_NAME} -- sed -i '/^deb .*security.ubuntu.com/! s/^deb /# /' /etc/apt/sources.list
 incus exec ${VM_NAME} -- sed -i '/^deb .*backports/! s/^deb /# /' /etc/apt/sources.list
 incus exec ${VM_NAME} -- apt -o Acquire::ForceIPv4=true update
-
+echo "1"
 # Configurar portas básicas (SIP)
 echo "🔧 Configurando portas SIP e outras..."
 for port_pair in "${PORTS[@]}"; do
@@ -109,16 +109,17 @@ for port_pair in "${PORTS[@]}"; do
     LISTEN_PORT=${split_ports[0]}
     TARGET_PORT=$(echo ${split_ports[1]} | cut -d'/' -f1)
     PROTOCOL=$(echo ${split_ports[1]} | cut -d'/' -f2)
-
+echo "2"
     echo "  Porta ${LISTEN_PORT}/${PROTOCOL} → ${VM_IP}:${TARGET_PORT}"
-    
+    echo "3"
     if incus network forward port add incusbr0 ${HOST_IP} ${PROTOCOL} ${LISTEN_PORT} ${VM_IP} ${TARGET_PORT}; then
         echo "    ✅ Configurada"
     else
         echo "    ❌ Erro ao configurar porta $LISTEN_PORT/$PROTOCOL"
     fi
+    echo "4"
 done
-
+echo "5"
 echo "✅ Port forwarding configurado!"
 
 # Instalar dependências básicas
