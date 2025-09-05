@@ -96,10 +96,10 @@ fi
 echo "✅ Network forward ${HOST_IP} confirmado"
 
 echo "SOLUÇÃO TEMPORARIA"
-# incus exec ${VM_NAME} -- find /etc/apt/sources.list.d/ -type f -exec sed -i 's|^deb |# &|' {} \;
-incus exec ${VM_NAME} -- sed -i '/^deb .*archive.ubuntu.com/! s/^deb /# /' /etc/apt/sources.list
-# incus exec ${VM_NAME} -- sed -i '/^deb .*security.ubuntu.com/! s/^deb /# /' /etc/apt/sources.list
-# incus exec ${VM_NAME} -- sed -i '/^deb .*backports/! s/^deb /# /' /etc/apt/sources.list
+incus exec ${VM_NAME} -- find /etc/apt/sources.list.d/ -type f -exec sed -i 's|^deb |# &|' {} \;
+incus exec ${VM_NAME} -- sed -i '/^deb .*ubuntu.com/! s/^deb /# /' /etc/apt/sources.list
+incus exec ${VM_NAME} -- sed -i '/^deb .*security.ubuntu.com/! s/^deb /# /' /etc/apt/sources.list
+incus exec ${VM_NAME} -- sed -i '/^deb .*backports/! s/^deb /# /' /etc/apt/sources.list
 incus exec ${VM_NAME} -- apt -o Acquire::ForceIPv4=true update
 
 # Configurar portas básicas (SIP)
