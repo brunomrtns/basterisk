@@ -68,7 +68,7 @@ fi
 
 echo "Criando VM ${VM_NAME}..."
 sudo incus remove ${VM_NAME} --force || true
-sudo incus launch images:ubuntu/jammy ${VM_NAME} -c limits.cpu=4 -c security.privileged=true -c limits.memory=4GiB -c boot.autostart=false --vm
+sudo incus launch images:ubuntu/jammy ${VM_NAME} -c limits.cpu=4 -c security.privileged=true -c limits.memory=4GiB -c boot.autostart=true --vm
 
 # Aguardar VM ficar pronta
 wait_system_ready "${VM_NAME}"

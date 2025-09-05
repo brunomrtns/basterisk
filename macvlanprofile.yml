@@ -13,4 +13,4 @@ config:
   limits.cpu: "4"
   limits.memory: "4GiB"
   security.privileged: "true"
-  boot.autostart: "false"
+  boot.autostart: "true"
