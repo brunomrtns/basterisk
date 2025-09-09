@@ -22,7 +22,7 @@ install_vm_basics() {
         # apt upgrade -y && \
         # apt autoremove -y && \
         # apt autoclean -y && \
-        apt install -y tree nano netcat-openbsd tcpdump git > /dev/null 2>&1
+        apt install -y tree nano git netcat-openbsd tcpdump git > /dev/null 2>&1
     "
 }
 
