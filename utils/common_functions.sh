@@ -18,10 +18,10 @@ install_vm_basics() {
     
     echo "📦 Instalando dependências básicas na VM..."
     sudo incus exec ${vm_name} -- bash -c "
-        # apt update -y && \
-        # apt upgrade -y && \
-        # apt autoremove -y && \
-        # apt autoclean -y && \
+        apt update -y && \
+        apt upgrade -y && \
+        apt autoremove -y && \
+        apt autoclean -y && \
         apt install -y tree nano git netcat-openbsd tcpdump git > /dev/null 2>&1
     "
 }
