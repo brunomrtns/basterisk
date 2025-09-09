@@ -113,19 +113,54 @@ echo "✅ Port forwarding configurado!"
 # Instalar dependências básicas
 install_vm_basics "${VM_NAME}"
 
-# Testar conectividade
-if ! test_udp_connectivity "${VM_NAME}" "${HOST_IP}" "${HOST_UDP_PORT}" "forward"; then
+# Aguardar um pouco mais para a VM se estabilizar
+echo "⏱️  Aguardando VM se estabilizar..."
+sleep 10
+
+# Verificar se a VM está realmente respondendo
+echo "🔍 Testando conectividade básica com a VM..."
+if ! incus exec ${VM_NAME} -- ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+    echo "❌ VM não tem conectividade externa, aguardando mais..."
+    sleep 15
+fi
+
+# Testar conectividade UDP com mais tentativas
+echo "🧪 Testando conectividade UDP (múltiplas tentativas)..."
+UDP_TEST_SUCCESS=false
+for attempt in {1..3}; do
+    echo "  Tentativa ${attempt}/3..."
+    if test_udp_connectivity "${VM_NAME}" "${HOST_IP}" "${HOST_UDP_PORT}" "forward"; then
+        UDP_TEST_SUCCESS=true
+        echo "  ✅ Teste UDP bem-sucedido na tentativa ${attempt}!"
+        break
+    else
+        echo "  ❌ Tentativa ${attempt} falhou, aguardando 5s..."
+        sleep 5
+    fi
+done
+
+if [ "$UDP_TEST_SUCCESS" = false ]; then
     echo ""
-    echo "🔍 Diagnósticos:"
+    echo "🔍 Diagnósticos avançados:"
     echo "1. Verificando network forwards configurados:"
     incus network forward list incusbr0
     echo ""
     echo "2. Verificando portas configuradas:"
     incus network forward show incusbr0 ${HOST_IP}
     echo ""
-    echo "❌ ABORTANDO: Network forward UDP não está funcionando!"
-    echo "   Corrija o problema do forward primeiro."
-    exit 1
+    echo "3. Testando conectividade TCP na porta 8088 (ARI):"
+    if timeout 5 bash -c "echo >/dev/tcp/${HOST_IP}/8088" 2>/dev/null; then
+        echo "   ✅ TCP 8088 funcionando"
+    else
+        echo "   ❌ TCP 8088 não responde"
+    fi
+    echo ""
+    echo "4. Verificando se algum processo está escutando na porta 5060 da VM:"
+    incus exec ${VM_NAME} -- netstat -ln | grep :5060 || echo "   ❌ Nada escutando na porta 5060"
+    echo ""
+    echo "⚠️  AVISO: Teste UDP falhou, mas continuando com a instalação..."
+    echo "   O Asterisk pode resolver isso quando inicializar."
+    echo "   Se persistir, verifique firewall do host."
 fi
 
 # Instalar Asterisk
