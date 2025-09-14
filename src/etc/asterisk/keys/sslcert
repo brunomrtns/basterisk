@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 DIR="demoCA"
 rm -Rf "$DIR"
 mkdir "$DIR" "$DIR"/certs "$DIR"/crl "$DIR"/newcerts "$DIR"/private
