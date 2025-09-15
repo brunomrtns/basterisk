@@ -114,7 +114,6 @@ menuselect/menuselect \
 	--enable EXTRA-SOUNDS-EN-G729 \
 	--enable EXTRA-SOUNDS-EN-G722 \
 	--disable BUILD_NATIVE \
-	--enable res_pjsip_transport_tls \
 	menuselect.makeopts
 
 if [ $? -eq 0 ]; then
