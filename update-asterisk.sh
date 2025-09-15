@@ -53,25 +53,13 @@ sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no \
     $REMOTE_USER@$REMOTE_HOST "rm -rf /tmp/asterisk_temp && mkdir -p /tmp/asterisk_temp"
 
 # Copiar todo o diretório para o host remoto
-sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -r \
-    "$LOCAL_ASTERISK_DIR"/* $REMOTE_USER@$REMOTE_HOST:/tmp/asterisk_temp/
+sshpass -p "$REMOTE_PASSWORD" rsync -avz "$LOCAL_ASTERISK_DIR/" $REMOTE_USER@$REMOTE_HOST:/tmp/asterisk_temp/
 
-# Fazer merge (sobrescrever apenas os arquivos que existem no local, preservar outros)
-echo -e "${GREEN}[INFO]${NC} Atualizando arquivos individuais..."
-sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no \
-    $REMOTE_USER@$REMOTE_HOST "
-    # Para cada arquivo no diretório temporário, copiar para dentro da VM
-    find /tmp/asterisk_temp -type f | while read file; do
-        # Obter o caminho relativo
-        relative_path=\${file#/tmp/asterisk_temp/}
-        # Criar diretório se não existir na VM
-        dir_path=\$(dirname \"$REMOTE_ASTERISK_DIR/\$relative_path\")
-        incus exec $VM_NAME -- mkdir -p \"\$dir_path\"
-        # Copiar o arquivo
-        incus file push \"\$file\" \"$VM_NAME\$REMOTE_ASTERISK_DIR/\$relative_path\"
-        echo \"  ✓ Atualizado: \$relative_path\"
-    done
-    "
+echo -e "${GREEN}[INFO]${NC} Atualizando /etc/asterisk na VM via rsync..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+    tar -C /tmp/asterisk_temp -cf - . | incus exec $VM_NAME -- tar -C $REMOTE_ASTERISK_DIR -xf -
+"
+echo -e "${GREEN}[INFO]${NC} Atualização completa do diretório /etc/asterisk."
 
 # Limpar temporários
 sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no \
